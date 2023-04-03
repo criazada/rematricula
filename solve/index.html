@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Escolha de Disciplinas</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="main2.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div spellcheck="false" class="inputs">
+            <div class="sticky vertical">
+                <a href="ajuda.html" target="_blank">Descrição / Ajuda</a>
+
+                <div class="horizontal">
+                    <div>
+                        <label for="mincreditos">Mínimo de Créditos</label>
+                        <input id="mincreditos" type="number" value="16">
+                    </div>
+                    <div>
+                        <label for="maxcreditos">Máximo de Créditos</label>
+                        <input id="maxcreditos" type="number" value="28">
+                    </div>
+                </div>
+
+                <div class="horizontal">
+                    <div>
+                        <label for="buraco">Tamanho Mínimo de Buracos</label>
+                        <input id="minburaco" type="number" value="1">
+                    </div>
+                    <div>
+                        <label for="buraco">Tamanho Máximo de Buracos</label>
+                        <input id="maxburaco" type="number" value="4">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="turma">Turma Preferencial</label>
+                    <datalist id="turmasdt"></datalist>
+                    <input id="turma" list="turmasdt" type="text">
+                </div>
+
+                <div>
+                    <label for="desejadas">Disciplinas Desejadas</label>
+                    <textarea id="desejadas" placeholder="ABC123" rows="4"></textarea>
+                </div>
+
+                <div>
+                    <label for="disponiveis">Disciplinas Disponíveis</label>
+                    <textarea id="disponiveis" placeholder="ABC123" rows="4"></textarea>
+                    <button id="lotadas">Remover Lotadas</button>
+                </div>
+
+                <div>
+                    <label>Disciplina</label>
+                    <datalist id="todasdt"></datalist>
+                    <input id="disciplina" list="todasdt">
+                </div>
+
+                <div class="horizontal">
+                    <button id="add">Adicionar às<br> Disciplinas Disponíveis</button>
+                    <button id="remove">Remover das<br> Disciplinas Disponíveis</button>
+                </div>
+
+                <input id="reservedstt" hidden>
+            </div>
+        </div>
+        <div class="vertical">
+            <div id="ofmodel" class="hidden">
+                <abbr></abbr><span>-</span><abbr></abbr>
+            </div>
+            <table id="model">
+                <thead>
+                    <tr>
+                        <th>Horário</th>
+                        <th>Dom</th>
+                        <th>Seg</th>
+                        <th>Ter</th>
+                        <th>Qua</th>
+                        <th>Qui</th>
+                        <th>Sex</th>
+                        <th>Sáb</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>07:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>08:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>09:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>10:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>11:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>12:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>13:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>14:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>15:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>16:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>17:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>18:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>19:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>20:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>21:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                    <tr><td>22:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                </tbody>
+            </table>
+            <button id="generate">Gerar Grades</button>
+            <span class="hidden">Total Pesquisado: <span id="total"></span></span>
+            <span class="hidden">Total Válido: <span id="totalg"></span></span>
+            <span id="done" class="hidden">Concluído</span>
+            <hr>
+            <div id="res">
+                <div id="toclone" class="hidden">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Horário</th>
+                                <th>Dom</th>
+                                <th>Seg</th>
+                                <th>Ter</th>
+                                <th>Qua</th>
+                                <th>Qui</th>
+                                <th>Sex</th>
+                                <th>Sáb</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>07:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>08:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>09:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>10:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>11:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>12:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>13:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>14:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>15:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>16:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>17:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>18:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>19:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>20:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>21:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                            <tr><td>22:00</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="topaste"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

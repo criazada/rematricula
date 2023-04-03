@@ -1,0 +1,85 @@
+html, body {
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+table {
+    table-layout: fixed;
+    border-spacing: 0;
+    border-collapse: collapse;
+}
+
+table td {
+    width: 12.5%;
+    border: 1px solid black;
+}
+
+table th, table td:nth-child(1) {
+    border: 2px solid black;
+}
+
+table * {
+    text-align: center;
+}
+
+label, textarea, button {
+    display: block;
+}
+
+.container {
+    display: flex;
+    overflow-x: scroll;
+    justify-content: space-evenly;
+    gap: 2rem;
+    overflow: auto;
+}
+
+.horizontal, .vertical {
+    display: flex;
+}
+
+.vertical {
+    flex-grow: 2;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.horizontal {
+    flex-direction: row;
+    gap: 2rem;
+}
+
+.inputs {
+    flex-grow: 1;
+}
+
+.inputs * {
+    width: 100%;
+}
+
+.sticky {
+    position: sticky;
+    top: 0;
+}
+
+@media screen and (min-device-width: 350px) {
+    .help {
+        width: 350px;
+    }
+}
+
+.reserved {
+    background-color: lightgreen;
+}
+
+.conflict {
+    background-color: lightcoral;
+}
+
+.new {
+    background-color: lightskyblue;
+}
+
+.hidden {
+    display: none;
+}
