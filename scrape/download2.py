@@ -57,15 +57,15 @@ class OfertaHead:
     def from_dict(cls, d: dict[str, Any]) -> 'OfertaHead':
         return OfertaHead(**d)
 
-    def compress(self, discs: dict, turmas: dict, cursos: int):
+    def compress(self, discs: dict, turmas: dict, curso: int):
         if self.disc not in discs:
-            discs[self.disc] = [self.nome, []]
-        horarios = discs[self.disc][1]
+            discs[self.disc] = (self.nome, [])
+        ofertas = discs[self.disc][1]
 
         if self.turma not in turmas:
-            turmas[self.turma] = (len(turmas), [self.turma, cursos])
+            turmas[self.turma] = (len(turmas), curso)
 
-        return horarios, turmas[self.turma][0]
+        return ofertas, turmas[self.turma][0]
 
     def __str__(self) -> str:
         if self.bimestre:
@@ -173,6 +173,22 @@ class HorarioLocal:
         fim = Horario.from_dict(c.pop('fim'))
         return HorarioLocal(dia=dia, inicio=inicio, fim=fim, **c)
 
+    def compress(self, horarios: list, salas: dict):
+        if self.abbr not in salas:
+            salas[self.abbr] = (len(salas), self.local)
+        salaidx = salas[self.abbr][0]
+        if self.tipo == 'Prática':
+            tipo = 0
+        elif self.tipo == 'Teórica':
+            tipo = 1
+        else:
+            print(self.tipo)
+            tipo = 2
+        dia = self.dia.num
+        inicio = self.inicio.minuto // 10
+        fim = self.fim.minuto // 10
+        horarios.append((salaidx, tipo, dia, inicio, fim))
+
     def __str__(self) -> str:
         return (f'{self.local} ({self.abbr}) - '
                 f'{self.maximo} - '
@@ -222,9 +238,11 @@ class Oferta:
         if self.curso not in cursos:
             cursos[self.curso] = len(cursos)
 
-        horarios, turmaidx = self.head.compress(discs, turmas, cursos[self.curso])
+        ofertas, turmaidx = self.head.compress(discs, turmas, cursos[self.curso])
+        horarios = []
         for horario in self.horarios:
-            horario.compress(horarios, turmaidx)
+            horario.compress(horarios, salas)
+        ofertas.append((turmaidx, self.normal.vagas_restantes, self.especial.vagas_restantes, horarios))
 
     def __str__(self) -> str:
         hs = '\n'.join(str(h) for h in self.horarios)
@@ -595,14 +613,23 @@ def main(prog: str, argv: list[str]):
             if args.horarios:
                 horarios = json.load(args.horarios)['horarios']
 
-            discs = {}
-            turmas = {}
-            cursos = {}
-            salas = {}
+            c_discs = {}
+            d_turmas = {}
+            d_cursos = {}
+            d_salas = {}
 
             for oferta in horarios:
-                oferta.compress(discs, turmas, cursos, salas)
+                oferta.compress(c_discs, d_turmas, d_cursos, d_salas)
 
+            c_turmas = [(k, v[1]) for k, v in d_turmas.items()]
+            c_cursos = list(d_cursos.keys())
+            c_salas = [(k, v[1]) for k, v in d_salas.items()]
+            compressed = {
+                'd': c_discs,
+                't': c_turmas,
+                'c': c_cursos,
+                's': c_salas
+            }
             json.dump(compressed, args.exportar_horarios, separators=(',', ':'))
     except:
         traceback.print_exc()
