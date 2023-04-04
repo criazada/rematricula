@@ -8,8 +8,11 @@ import html
 import html.parser
 import traceback
 import re
+import json
+from typing import Any
 from logging import info, debug
 from urllib.parse import urlencode
+from dataclasses import dataclass, InitVar, asdict
 
 DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/111.0'
 DEFAULT_SIG_URL = 'https://sig.ufla.br{path}'
@@ -24,66 +27,118 @@ DEFAULT_SIG_MODULES = {
 oferta_re = re.compile(r'^(?P<disc>\w+) - (?P<nome>.*?) - (?P<turma>\w+)( \(((?P<bimestre>\d)º Bimestre|(?P<semestral>Semestral))\))?\s*$')
 cod_oferta_re = re.compile(r'.*?cod_oferta_disciplina=(?P<cod>.*?)&op=(abrir|fechar).*')
 
-@dataclasses.dataclass(init=False)
+@dataclasses.dataclass
 class OfertaHead:
     cod: str
     disc: str
     nome: str
     turma: str
-    bimestre: str | None
+    bimestre: str
     semestral: bool
 
-    def __init__(self, url: str, title: str) -> None:
+    @classmethod
+    def from_text(cls, url: str, title: str):
         m = oferta_re.match(title)
         c = cod_oferta_re.match(url)
+
         if m is None:
             raise ValueError(f'{title} is not a valid offer name')
         if c is None:
             raise ValueError(f'{url} is not a valid offer URL')
-        self.cod = c.group('cod')
-        self.disc = m.group('disc')
-        self.nome = m.group('nome')
-        self.turma = m.group('turma')
-        self.bimestre = m.group('bimestre')
-        self.semestral = m.group('semestral') is not None
 
-@dataclasses.dataclass(init=False)
+        return OfertaHead(c.group('cod'),
+                          m.group('disc'),
+                          m.group('nome'),
+                          m.group('turma'),
+                          m.group('bimestre'),
+                          m.group('semestral') is not None)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> 'OfertaHead':
+        return OfertaHead(**d)
+
+    def compress(self, discs: dict, turmas: dict, cursos: int):
+        if self.disc not in discs:
+            discs[self.disc] = [self.nome, []]
+        horarios = discs[self.disc][1]
+
+        if self.turma not in turmas:
+            turmas[self.turma] = (len(turmas), [self.turma, cursos])
+
+        return horarios, turmas[self.turma][0]
+
+    def __str__(self) -> str:
+        if self.bimestre:
+            b = f' ({self.bimestre}º Bimestre)'
+        elif self.semestral:
+            b = f' (Semestral)'
+        else:
+            b = ''
+        return f'{self.disc} - {self.nome} - {self.turma}{b} ({self.cod})'
+
+@dataclasses.dataclass
 class MatInfo:
     vagas_oferecidas: int
     vagas_ocupadas: int
     vagas_restantes: int
     solicitacoes_pendentes: int
-    candidatos_por_vaga: float | None
 
-    def __init__(self, mat_info: dict[str, str]) -> None:
-        self.vagas_oferecidas = int(mat_info['Vagas oferecidas'])
-        self.vagas_ocupadas = int(mat_info['Vagas ocupadas'])
-        self.vagas_restantes = int(mat_info['Vagas restantes'])
-        self.solicitacoes_pendentes = int(mat_info['Solicitações Pendentes'])
-        self.candidatos_por_vaga = None
+    @classmethod
+    def from_mat(cls, mat_info: dict[str, str]) -> 'MatInfo':
+        return MatInfo(int(mat_info['Vagas oferecidas']),
+                       int(mat_info['Vagas ocupadas']),
+                       int(mat_info['Vagas restantes'].strip('*')),
+                       int(mat_info['Solicitações Pendentes']))
 
-@dataclasses.dataclass(init=False)
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> 'MatInfo':
+        return MatInfo(**d)
+
+    def __str__(self) -> str:
+        return (f'- Vagas Oferecidas: {self.vagas_oferecidas}\n'
+                f'- Vagas Ocupadas: {self.vagas_ocupadas}\n'
+                f'- Vagas Restantes: {self.vagas_restantes}\n'
+                f'- Solicitações Pendentes: {self.solicitacoes_pendentes}')
+
+dias = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'nenhum']
+
+@dataclasses.dataclass
 class Dia:
-    num: int | None
+    num: int
 
-    def __init__(self, dia: str) -> None:
+    @classmethod
+    def from_dia(cls, dia: str) -> 'Dia':
         dia = dia.lower()
-        if dia == 'sem dia definido':
-            self.num = None
-            return
+        num = -1 if dia.startswith('sem') else dias.index(dia)
+        return Dia(num)
 
-        dias = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
-        self.num = dias.index(dia)
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> 'Dia':
+        return Dia(d['num'])
 
-@dataclasses.dataclass(init=False)
+    def __str__(self) -> str:
+        return f'{dias[self.num]}'
+
+@dataclasses.dataclass
 class Horario:
-    minuto: int | None
+    minuto: int
 
-    def __init__(self, hora: str) -> None:
+    @classmethod
+    def from_hora(cls, hora: str) -> 'Horario':
         h, m = [int(x) for x in hora.split(':')]
-        self.minuto = h * 60 + m
+        minuto = h * 60 + m
+        return Horario(minuto)
 
-@dataclasses.dataclass(init=False)
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> 'Horario':
+        return Horario(**d)
+
+    def __str__(self) -> str:
+        m = self.minuto % 60
+        h = self.minuto // 60
+        return f'{h:02}:{m:02}'
+
+@dataclasses.dataclass
 class HorarioLocal:
     local: str
     abbr: str
@@ -91,43 +146,93 @@ class HorarioLocal:
     ocupacao: int
     tipo: str
     dia: Dia
-    inicio: Horario | None
-    fim: Horario | None
+    inicio: Horario
+    fim: Horario
 
-    def __init__(self, info: list[str]) -> None:
-        self.local = info[0]
-        self.abbr = info[1]
-        self.maximo = info[2] == 'Sim'
-        self.ocupacao = int(info[3])
-        self.tipo = info[4]
-        self.dia = Dia(info[5])
-        if info[6] == 'Sem horário definido':
-            self.inicio = None
-            self.fim = None
-            return
-        horas = info[6].split(' - ')
-        self.inicio = Horario(horas[0])
-        self.fim = Horario(horas[1])
+    @classmethod
+    def from_info(cls, info: list[str]) -> 'HorarioLocal':
+        horario = info[6]
+        if horario == 'Sem horário definido':
+            horario = '00:00 - 00:00'
+        horas = horario.split(' - ')
 
-@dataclasses.dataclass(init=False)
+        return HorarioLocal(local=info[0].strip(),
+                            abbr=info[1],
+                            maximo=info[2] == 'Sim',
+                            ocupacao=int(info[3]),
+                            tipo=info[4],
+                            dia=Dia.from_dia(info[5]),
+                            inicio=Horario.from_hora(horas[0]),
+                            fim=Horario.from_hora(horas[1]))
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> 'HorarioLocal':
+        c = d.copy()
+        dia = Dia.from_dict(c.pop('dia'))
+        inicio = Horario.from_dict(c.pop('inicio'))
+        fim = Horario.from_dict(c.pop('fim'))
+        return HorarioLocal(dia=dia, inicio=inicio, fim=fim, **c)
+
+    def __str__(self) -> str:
+        return (f'{self.local} ({self.abbr}) - '
+                f'{self.maximo} - '
+                f'{self.ocupacao} - '
+                f'{self.tipo} - '
+                f'{self.dia} - '
+                f'{self.inicio} - '
+                f'{self.fim}')
+
+@dataclasses.dataclass
 class Oferta:
     head: OfertaHead
     situacao: str
+    curso: str
     normal: MatInfo
     especial: MatInfo
     horarios: list[HorarioLocal]
 
-    def __init__(self,
-                 head: OfertaHead,
-                 info: dict[str, str],
-                 normal: dict[str, str],
-                 especial: dict[str, str],
-                 horarios: list[list[str]]) -> None:
-        self.head = head
-        self.situacao = info['Situação']
-        self.normal = MatInfo(normal)
-        self.especial = MatInfo(especial)
-        self.horarios = [HorarioLocal(h) for h in horarios]
+    @classmethod
+    def from_info(cls,
+                  head: OfertaHead,
+                  info: dict[str, str],
+                  normal: dict[str, str],
+                  especial: dict[str, str],
+                  horarios: list[list[str]]):
+        return Oferta(head,
+                      situacao=info['Situação'],
+                      curso=info['Oferta de Curso'],
+                      normal=MatInfo.from_mat(normal),
+                      especial=MatInfo.from_mat(especial),
+                      horarios=[HorarioLocal.from_info(h) for h in horarios])
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> 'Oferta':
+        c = d.copy()
+        return Oferta(head=OfertaHead.from_dict(c.pop('head')),
+                      normal=MatInfo.from_dict(c.pop('normal')),
+                      especial=MatInfo.from_dict(c.pop('especial')),
+                      horarios=[HorarioLocal.from_dict(h) for h in c.pop('horarios')],
+                      **c)
+
+    def compress(self,
+                 discs: dict,
+                 turmas: dict,
+                 cursos: dict,
+                 salas: dict):
+        if self.curso not in cursos:
+            cursos[self.curso] = len(cursos)
+
+        horarios, turmaidx = self.head.compress(discs, turmas, cursos[self.curso])
+        for horario in self.horarios:
+            horario.compress(horarios, turmaidx)
+
+    def __str__(self) -> str:
+        hs = '\n'.join(str(h) for h in self.horarios)
+        return (f'{self.head}\n'
+                f'{self.situacao}\n'
+                f'Matrícula Normal:\n{self.normal}\n'
+                f'Matrícula Especial:\n{self.especial}\n'
+                f'{hs}\n')
 
 class ConsultaParser(html.parser.HTMLParser):
     def reset(self) -> None:
@@ -145,7 +250,7 @@ class ConsultaParser(html.parser.HTMLParser):
             if k == 'title':
                 title = v
         if not title or not url: return
-        self.ofertas.append(OfertaHead(url, title))
+        self.ofertas.append(OfertaHead.from_text(url, title))
 
     def handle_inputtag(self, attrs: list[tuple[str, str | None]]) -> None:
         is_token = False
@@ -219,16 +324,12 @@ class OfertaParser(html.parser.HTMLParser):
         if self._inside['td']:
             self._current_row.append(data)
 
-class Scraper:
+class Sig:
     def __init__(self,
-                 user: str,
-                 password: str,
                  *,
                  sig_url: str = DEFAULT_SIG_URL,
                  sig_modules: dict[str, str] = DEFAULT_SIG_MODULES,
                  user_agent: str = DEFAULT_USER_AGENT) -> None:
-        self._user = user
-        self._password = password
         self._session = requests.Session()
         self._session.headers['User-Agent'] = user_agent
         self._base_url = sig_url
@@ -239,7 +340,7 @@ class Scraper:
         self._consulta_parser = ConsultaParser()
         self._oferta_parser = OfertaParser()
 
-    def _sig_request(self, method: str, module: str, *args, err_not_ok: bool = True, data = None, headers = None, **kwargs):
+    def _sig_request(self, method: str, module: str, *, err_not_ok: bool = True, data = None, headers = None, **kwargs):
         if method == 'POST' and data is not None:
             if headers is None:
                 headers = {}
@@ -255,7 +356,7 @@ class Scraper:
             url,
             headers=headers,
             data=data,
-            *args, **kwargs
+            **kwargs
         )
 
         debug(f'sig_request {method} {module} {r.status_code}')
@@ -269,13 +370,13 @@ class Scraper:
     def _sig_post(self, module: str, *args, **kwargs):
         return self._sig_request('POST', module, *args, **kwargs)
 
-    def login(self) -> bool:
+    def login(self, user, password) -> bool:
         self._sig_get('index')
         self._sig_post(
             'login',
             data={
-                'login': self._user,
-                'senha': self._password,
+                'login': user,
+                'senha': password,
                 'lembrar_login': 0,
                 'entrar': 'Entrar'
             })
@@ -326,7 +427,7 @@ class Scraper:
         r = self._sig_get('consultar', params=params)
 
         self._oferta_parser.feed(html.unescape(r.text))
-        new_oferta = Oferta(
+        new_oferta = Oferta.from_info(
             oferta,
             self._oferta_parser.info,
             self._oferta_parser.info_normal,
@@ -342,9 +443,9 @@ class Scraper:
         self._sig_get('logout')
         return True
 
-def main(argv: list[str]):
+def main(prog: str, argv: list[str]):
     parser = argparse.ArgumentParser(
-        prog='uflascrape',
+        prog=prog,
         description='Obtenha dados do SIG/UFLA.',
         epilog='''
             Código fonte disponível em https://github.com/criazada/rematricula.
@@ -352,12 +453,54 @@ def main(argv: list[str]):
         add_help=False
     )
 
-    parser.add_argument('-h', '--help', help='exibe esta mensagem de ajuda', action='store_true')
+    parser.add_argument('-h', '--help',
+                        help='exibe esta mensagem de ajuda', action='store_true')
+    parser.add_argument('-s', '--salvar',
+                        help='salva os resultados das operações em um arquivo',
+                        metavar='ARQUIVO', type=argparse.FileType('r+', encoding='utf-8'))
 
-    auth = parser.add_argument_group('autenticação', 'opções de autenticação com o SIG').add_mutually_exclusive_group()
-    auth.add_argument('-l', '--login', help='seu login do SIG no formato usuario:senha')
-    auth.add_argument('--arquivo-login', help='arquivo contendo seu usuário e senha no formato usuario:senha', metavar='ARQUIVO',
-                      type=argparse.FileType('r'))
+    auth = parser.add_argument_group('autenticação', 'opções de autenticação').add_mutually_exclusive_group()
+    auth.add_argument('-l', '--login',
+                      help='seu login do SIG no formato usuario:senha')
+    auth.add_argument('-a', '--arquivo-login',
+                      help='arquivo contendo seu usuário e senha no formato usuario:senha',
+                      metavar='ARQUIVO', type=argparse.FileType('r', encoding='utf-8'))
+
+    ofert = parser.add_argument_group('ofertas', 'opções para busca de ofertas (requer autenticação)')
+    ofert.add_argument('--buscar-ofertas',
+                       help='realiza uma busca de ofertas com as possíveis seguintes opções',
+                       action='store_true')
+    ofert.add_argument('--matriz',
+                       help='realizar busca somente na sua matriz curricular',
+                       action='store_true')
+    ofert.add_argument('--periodo',
+                       help='buscar por matérias no período PERIODO da sua matriz (deve ser utilizado junto com --matriz)',
+                       choices=['todos', 'eletivas', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], default='todos')
+    ofert.add_argument('--disciplina',
+                       help='código da disciplina (ex GCC123)',
+                       metavar='CODIGO')
+    ofert.add_argument('--nome',
+                       help='nome da disciplina')
+    ofert.add_argument('--oferta',
+                       help='tipo de oferta',
+                       choices=['todos', 'semestral', '1b', '2b'], default='todos')
+
+    horas = parser.add_argument_group('horários', 'opções para obtenção de horários e locais de ofertas (requer autenticação)')
+    horas.add_argument('--buscar-horarios',
+                       help='buscar horários de ofertas de disciplinas',
+                       action='store_true')
+    horas.add_argument('--ofertas',
+                       help='arquivo com ofertas desejadas',
+                       metavar='ARQUIVO',
+                       type=argparse.FileType('r', encoding='utf-8'))
+    horas.add_argument('--horarios',
+                       help='arquivo com horários',
+                       metavar='ARQUIVO',
+                       type=argparse.FileType('r', encoding='utf-8'))
+    horas.add_argument('--exportar-horarios',
+                       help='exportar arquivo para uso na ferramenta web',
+                       metavar='ARQUIVO',
+                       type=argparse.FileType('w', encoding='utf-8'))
 
     args = parser.parse_args(argv)
 
@@ -365,22 +508,108 @@ def main(argv: list[str]):
         parser.print_help()
         return
 
-    user = None
-    password = None
-    if args.login or args.arquivo:
-        t = args.login if args.login else args.arquivo.read()
-        parts = t.strip().split()
-        user = parts[0]
-        password = ':'.join(parts[1:])
+    if args.salvar:
+        args.salvar.seek(0, 2)
+        if args.salvar.tell() < 2:
+            args.salvar.seek(0)
+            json.dump({}, args.salvar)
 
-    scp = Scraper(args.login, args.senha)
+    login = args.login or args.arquivo_login
+    sig = Sig()
     try:
-        print(scp.login())
-        ofertas = scp.get_ofertas()
-        print(scp.get_oferta(ofertas[0]))
+        if login:
+            t = args.login if args.login else args.arquivo_login.read()
+            parts = t.strip().split(':')
+            user = parts[0]
+            password = ':'.join(parts[1:])
+            sig.login(user, password)
+
+        ofertas: list[OfertaHead] = []
+        horarios: list[Oferta] = []
+
+        if args.salvar:
+            args.salvar.seek(0)
+            data = json.load(args.salvar)
+
+            ofertas = data['ofertas']
+            horarios = data['horarios']
+
+        if args.buscar_ofertas:
+            if not login:
+                print('É necessário se autenticar para realizar busca de ofertas')
+                return
+
+            matriz = args.matriz
+            periodo = args.periodo
+            disciplina = args.disciplina
+            nome = args.nome
+            oferta = args.oferta
+
+            map_periodo = {
+                'todos': 'T',
+                'eletivas': 'e'
+            }
+            periodo = map_periodo.get(periodo, periodo)
+
+            map_oferta = {
+                'semestral': 3,
+                '1b': 1,
+                '2b': 2,
+                'todos': 'T'
+            }
+            oferta = map_oferta[oferta]
+
+            ofertas = sig.get_ofertas(matriz, periodo, disciplina, nome, oferta)
+
+            if args.salvar:
+                args.salvar.seek(0)
+                data = json.load(args.salvar)
+
+                data['ofertas'] = [asdict(o) for o in ofertas]
+
+                args.salvar.seek(0)
+                json.dump(data, args.salvar)
+
+        if args.buscar_horarios:
+            if args.ofertas:
+                ofertas = json.load(args.ofertas)['ofertas']
+
+            for i, oferta in enumerate(ofertas):
+                if args.salvar:
+                    print(f'Obtendo horário para {oferta} ({i+1}/{len(ofertas)})')
+                oferta_full = sig.get_oferta(oferta)
+                if not args.salvar:
+                    print(oferta_full)
+                horarios.append(oferta_full)
+
+            if args.salvar:
+                args.salvar.seek(0)
+                data = json.load(args.salvar)
+
+                data['horarios'] = [asdict(h) for h in horarios]
+
+                args.salvar.seek(0)
+                json.dump(data, args.salvar)
+
+        if args.exportar_horarios:
+            if args.horarios:
+                horarios = json.load(args.horarios)['horarios']
+
+            discs = {}
+            turmas = {}
+            cursos = {}
+            salas = {}
+
+            for oferta in horarios:
+                oferta.compress(discs, turmas, cursos, salas)
+
+            json.dump(compressed, args.exportar_horarios, separators=(',', ':'))
     except:
         traceback.print_exc()
-        print(scp.logout())
+
+    finally:
+        if login:
+            sig.logout()
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main(sys.argv[0], sys.argv[1:])
